@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Suivi compteur 1200 h - Accès restreint</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background: #f4f5f7;
+      color: #333;
+    }
+    h1 {
+      margin-bottom: 5px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px 25px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      max-width: 600px;
+      margin-top: 20px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .label {
+      font-weight: bold;
+      color: #555;
+    }
+    .value {
+      font-family: "Consolas", "Roboto Mono", monospace;
+    }
+    .progress-container {
+      margin-top: 20px;
+    }
+    .progress-bar-background {
+      width: 100%;
+      height: 24px;
+      border-radius: 12px;
+      background: #e0e0e0;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3b82f6, #22c55e);
+      transition: width 0.5s ease-out;
+    }
+    .progress-text {
+      margin-top: 6px;
+      text-align: right;
+      font-size: 14px;
+      color: #444;
+    }
+    .status {
+      margin-top: 15px;
+      font-size: 15px;
+      font-weight: bold;
+    }
+    .status.ok {
+      color: #16a34a;
+    }
+    .status.over {
+      color: #dc2626;
+    }
+    .error {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #b91c1c;
+    }
+    .last-update {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #666;
+      text-align: right;
+    }
+
+    /* Bloc login */
+    #loginCard {
+      max-width: 400px;
+    }
+    .login-label {
+      font-weight: bold;
+      margin-bottom: 5px;
+      display: block;
+    }
+    .login-input {
+      width: 100%;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    .login-button {
+      padding: 8px 16px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .login-button:hover {
+      background: #1d4ed8;
+    }
+    .login-error {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #b91c1c;
+    }
+  </style>
+</head>
+<body>
+  <h1>Suivi compteur 1200 heures</h1>
+  <div class="subtitle">Accès restreint par mot de passe (projet 1)</div>
+
+  <!-- Bloc de connexion -->
+  <div class="card" id="loginCard">
+    <div class="login-label">Mot de passe :</div>
+    <input
+      type="password"
+      id="passwordInput"
+      class="login-input"
+      placeholder="Entrez le mot de passe"
+    />
+    <button class="login-button" onclick="checkPassword()">Valider</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+
+  <!-- Bloc compteur (caché tant que le mot de passe n'est pas correct) -->
+  <div class="card" id="compteurCard" style="display:none;">
+    <div class="row">
+      <div class="label">Heures réalisées :</div>
+      <div class="value" id="heuresRealisees">-</div>
+    </div>
+    <div class="row">
+      <div class="label">Objectif :</div>
+      <div class="value" id="objectif">1200 h</div>
+    </div>
+    <div class="row">
+      <div class="label">Reste à faire :</div>
+      <div class="value" id="heuresRestantes">-</div>
+    </div>
+
+    <div class="progress-container">
+      <div class="progress-bar-background">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-text" id="progressText">-</div>
+    </div>
+
+    <div class="status" id="statusText"></div>
+    <div class="error" id="errorText"></div>
+    <div class="last-update" id="lastUpdate"></div>
+  </div>
+
+  <script>
+    // ⚠⚠ Mot de passe "léger" : à changer selon ton besoin
+    // Exemple simple : "projet1", "compteur-1200", etc.
+    const PASSWORD = "CLAUGER_BIGARDNRJ";
+
+    const TARGET_HOURS = 1200;
+    const DATA_URL = "data.json"; // fichier à côté de cette page
+    const REFRESH_MS = 30000;     // 30 secondes
+
+    function checkPassword() {
+      const input = document.getElementById("passwordInput").value;
+      const error = document.getElementById("loginError");
+
+      if (input === PASSWORD) {
+        // Masquer le bloc de login, montrer le compteur
+        document.getElementById("loginCard").style.display = "none";
+        document.getElementById("compteurCard").style.display = "block";
+
+        // On charge les données maintenant que la personne est "connectée"
+        fetchData();
+        setInterval(fetchData, REFRESH_MS);
+      } else {
+        error.textContent = "Mot de passe incorrect.";
+      }
+    }
+
+    function formatNumber(n) {
+      return (Math.round(n * 10) / 10).toString().replace(".", ",");
+    }
+
+    function updateUI(data) {
+      const heures = Number(data.heures_realisees || 0);
+      const heuresClamped = Math.max(0, heures);
+      const restantes = Math.max(0, TARGET_HOURS - heuresClamped);
+      let percent = (heuresClamped / TARGET_HOURS) * 100;
+      if (percent > 100) percent = 100;
+
+      document.getElementById("heuresRealisees").textContent =
+        formatNumber(heuresClamped) + " h";
+      document.getElementById("heuresRestantes").textContent =
+        formatNumber(restantes) + " h";
+
+      const fill = document.getElementById("progressFill");
+      fill.style.width = percent + "%";
+      document.getElementById("progressText").textContent =
+        formatNumber(percent) + " % de 1200 h";
+
+      const status = document.getElementById("statusText");
+      if (heuresClamped >= TARGET_HOURS) {
+        status.textContent = "Objectif de 1200 h atteint (ou dépassé).";
+        status.className = "status over";
+      } else {
+        status.textContent = "En cours…";
+        status.className = "status ok";
+      }
+
+      document.getElementById("errorText").textContent = "";
+
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      const ts =
+        pad(now.getDate()) + "/" +
+        pad(now.getMonth() + 1) + "/" +
+        now.getFullYear() + " " +
+        pad(now.getHours()) + ":" +
+        pad(now.getMinutes()) + ":" +
+        pad(now.getSeconds());
+      document.getElementById("lastUpdate").textContent =
+        "Dernière actualisation : " + ts;
+    }
+
+    function showError(msg) {
+      document.getElementById("errorText").textContent = msg;
+    }
+
+    function fetchData() {
+      fetch(DATA_URL + "?t=" + Date.now()) // évite le cache
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Impossible de charger " + DATA_URL);
+          }
+          return response.json();
+        })
+        .then((data) => {
+          if (typeof data.heures_realisees === "undefined") {
+            throw new Error("Champ 'heures_realisees' manquant dans data.json");
+          }
+          updateUI(data);
+        })
+        .catch((err) => {
+          console.error(err);
+          showError("Erreur de lecture des données. Vérifiez le fichier data.json.");
+        });
+    }
+
+    // Permet d'appuyer sur Entrée pour valider le mot de passe
+    document.addEventListener("DOMContentLoaded", () => {
+      const input = document.getElementById("passwordInput");
+      input.addEventListener("keyup", (event) => {
+        if (event.key === "Enter") {
+          checkPassword();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
